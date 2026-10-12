@@ -398,6 +398,14 @@ Arm64Emitter::Arm64Emitter(FEXCore::Context::ContextImpl* ctx, void* EmissionPtr
     StaticRegisters = x32::SRA;
     GeneralRegisters = x32::RA;
     GeneralRegistersNotPreserved = x32::NotPreserved_Dynamic;
+#ifndef ARCHITECTURE_arm64ec
+    if (EmitterCTX->GuestMemoryBase) {
+      // r24 and r19 (the last two, outside the pair range) become REG_MEMADDR/REG_MEMBASE.
+      static_assert(x32::RA[x32::RA.size() - 2] == ARMEmitter::Reg::r24 && x32::RA[x32::RA.size() - 1] == ARMEmitter::Reg::r19);
+      static_assert(x32::RAPairs <= x32::RA.size() - 2);
+      GeneralRegisters = GeneralRegisters.first(x32::RA.size() - 2);
+    }
+#endif
 
     StaticFPRegisters = x32::SRAFPR;
     GeneralFPRegisters = x32::RAFPR;

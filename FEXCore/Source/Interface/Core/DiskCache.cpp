@@ -570,11 +570,11 @@ namespace DiskCache {
         uint64_t HashStart = SubBlock.Entry;
         // skip over masked in-block data and data/etc gaps between blocks
         for (auto& DataMask : SubBlock.DataMasks) {
-          XXH3_64bits_update(&HashState, reinterpret_cast<const uint8_t*>(HashStart), DataMask.FieldAddress - HashStart);
+          XXH3_64bits_update(&HashState, CTX->GuestToHost<const uint8_t>(HashStart), DataMask.FieldAddress - HashStart);
           HashStart = DataMask.FieldAddress + DataMask.ValueSize;
         }
         if (HashStart != SubBlock.Entry + SubBlock.Size) {
-          XXH3_64bits_update(&HashState, reinterpret_cast<const uint8_t*>(HashStart), SubBlock.Size - (HashStart - SubBlock.Entry));
+          XXH3_64bits_update(&HashState, CTX->GuestToHost<const uint8_t>(HashStart), SubBlock.Size - (HashStart - SubBlock.Entry));
         }
       }
       GuestCodeKey = XXH3_64bits_digest(&HashState);
@@ -698,7 +698,7 @@ namespace DiskCache {
           XXH3_state_t HashState;
           XXH3_128bits_reset(&HashState);
           for (uint32_t i = 0; i < Entry.GuestExtents.size(); i += 2) {
-            XXH3_128bits_update(&HashState, reinterpret_cast<uint8_t*>(GuestRIP) + Entry.GuestExtents[i], Entry.GuestExtents[i + 1]);
+            XXH3_128bits_update(&HashState, CTX->GuestToHost<const uint8_t>(GuestRIP) + Entry.GuestExtents[i], Entry.GuestExtents[i + 1]);
           }
           LiveGuestHash = XXH3_128bits_digest(&HashState);
           LastFootprintHashed = CurrentFootprint;
@@ -712,7 +712,7 @@ namespace DiskCache {
           fextl::vector<uint8_t> GuestCode(Entry.GuestSize);
           if (Entry.Size >= Entry.GuestSize && Entry.DB && Entry.DB->ReadCacheBlob(Entry.Offset + Entry.Size - Entry.GuestSize, GuestCode)) {
             const uint8_t* CachedGuest = GuestCode.data();
-            const uint8_t* LiveGuest = reinterpret_cast<const uint8_t*>(GuestRIP);
+            const uint8_t* LiveGuest = CTX->GuestToHost<const uint8_t>(GuestRIP);
             uint64_t DiffCount = 0;
             uint64_t DiffOffset = 0;
             for (uint32_t i = 0; i < Entry.GuestExtents.size(); i += 2) {

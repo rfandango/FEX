@@ -469,10 +469,11 @@ inline Ref X87StackOptimization::GetX87ValidTag_Slow(uint8_t Offset) {
 }
 
 inline Ref X87StackOptimization::LoadStackValueAtOffset_Slow(uint8_t Offset) {
-  OrderedNode* TopOffsetAddress = GetOffsetTopAddressWithCache_Slow(Offset);
   auto Size = ReducedPrecisionMode ? OpSize::i64Bit : OpSize::i128Bit;
   if (!TopValueCache[Offset]) {
-    TopValueCache[Offset] = IREmit->_LoadMemFPR(Size, TopOffsetAddress, IREmit->_InlineConstant(MMBaseOffset()), Size, MemOffsetType::SXTX, 1);
+    // haku: context-indexed access, not LoadMem on a FormContextAddress pointer: the
+    // x87 register file is host memory, which LoadMem would put behind the guest memory base.
+    TopValueCache[Offset] = IREmit->_LoadContextIndexed(GetOffsetTopWithCache_Slow(Offset), Size, MMBaseOffset(), 16, RegClass::FPR);
   }
   return TopValueCache[Offset];
 }
@@ -618,8 +619,8 @@ void X87StackOptimization::FlushCachedRegs() {
   auto Size = ReducedPrecisionMode ? OpSize::i64Bit : OpSize::i128Bit;
   for (size_t i = 0; i < FlushValuesPending.size(); i++) {
     if (FlushValuesPending[i]) {
-      OrderedNode* TopOffsetAddress = GetOffsetTopAddressWithCache_Slow(i);
-      IREmit->_StoreMemFPR(Size, TopValueCache[i], TopOffsetAddress, IREmit->_InlineConstant(MMBaseOffset()), Size, MemOffsetType::SXTX, 1);
+      // haku: see LoadStackValueAtOffset_Slow.
+      IREmit->_StoreContextIndexed(TopValueCache[i], GetOffsetTopWithCache_Slow(i), Size, MMBaseOffset(), 16, RegClass::FPR);
       // store
       FlushValuesPending[i] = false;
     }

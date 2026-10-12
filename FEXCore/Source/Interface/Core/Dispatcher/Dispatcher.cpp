@@ -80,6 +80,12 @@ void Dispatcher::EmitDispatcher() {
   // Move our thread pointer to the correct register
   // This is passed in to parameter 0 (x0)
   mov(STATE, ARMEmitter::XReg::x0);
+#ifndef ARCHITECTURE_arm64ec
+  if (CTX->GuestMemoryBase) {
+    // After PushCalleeSavedRegisters, which uses x19 as scratch.
+    LoadConstant(ARMEmitter::Size::i64Bit, REG_MEMBASE, CTX->GuestMemoryBase);
+  }
+#endif
 
   // Save this stack pointer so we can cleanly shutdown the emulation with a long jump
   // regardless of where we were in the stack
@@ -485,6 +491,11 @@ void Dispatcher::EmitDispatcher() {
 
     // First thing we need to move the thread state pointer back in to our register
     mov(STATE, ARMEmitter::XReg::x0);
+#ifndef ARCHITECTURE_arm64ec
+    if (CTX->GuestMemoryBase) {
+      LoadConstant(ARMEmitter::Size::i64Bit, REG_MEMBASE, CTX->GuestMemoryBase);
+    }
+#endif
 
     // Make sure to adjust the refcounter so we don't clear the cache now
     ldr(ARMEmitter::WReg::w2, STATE_PTR(CpuStateFrame, SignalHandlerRefCounter));
@@ -501,7 +512,15 @@ void Dispatcher::EmitDispatcher() {
 
     // Store the trampoline to the guest stack
     // Guest stack is now correctly misaligned after a regular call instruction
-    str(ARMEmitter::XReg::x0, ARMEmitter::Reg::r2, 0);
+#ifndef ARCHITECTURE_arm64ec
+    if (CTX->GuestMemoryBase) {
+      // 32-bit guest: the stack slot and the return address are 32-bit.
+      str(ARMEmitter::WReg::w0, REG_MEMBASE, ARMEmitter::WReg::w2, ARMEmitter::ExtendedType::UXTW, 0);
+    } else
+#endif
+    {
+      str(ARMEmitter::XReg::x0, ARMEmitter::Reg::r2, 0);
+    }
 
     // Store RIP to the context state
     str(ARMEmitter::XReg::x1, STATE_PTR(CpuStateFrame, State.rip));

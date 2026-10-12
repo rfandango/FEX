@@ -534,6 +534,13 @@
         "DestSize": "Size"
       },
 
+      "GPR = LoadMemHost OpSize:#Size, GPR:$Addr, GPR:$Offset, MemOffsetType:$OffsetType, u8:$OffsetScale": {
+        "Desc": ["haku: loads from a host pointer (FEX's own tables, e.g. the GDT/LDT).",
+                 "Unlike LoadMem it never goes through the guest memory base."
+                ],
+        "DestSize": "Size"
+      },
+
       "SSA:$Value1, SSA:$Value2 = LoadMemPair RegisterClass:$Class, OpSize:#Size, GPR:$Addr, u32:$Offset": {
         "Desc": ["Load a pair of values from memory."],
         "DestSize": "Size",

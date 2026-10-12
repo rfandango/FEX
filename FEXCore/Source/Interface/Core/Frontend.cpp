@@ -1366,9 +1366,12 @@ const Decoder::DecodeStream Decoder::AdjustAddrForSpecialRegion(const uint8_t* _
     };
   }
 
+  // InstStream stays in guest addresses (executable range checks); bytes are read through
+  // AdjustedInstStream, which is behind the guest memory base when there is one.
+  const uint8_t* GuestStream = _InstStream - EntryPoint + RIP;
   return DecodeStream {
-    .InstStream = _InstStream - EntryPoint + RIP,
-    .AdjustedInstStream = _InstStream - EntryPoint + RIP,
+    .InstStream = GuestStream,
+    .AdjustedInstStream = CTX->GuestMemoryBase ? CTX->GuestToHost<const uint8_t>(reinterpret_cast<uint64_t>(GuestStream)) : GuestStream,
   };
 }
 

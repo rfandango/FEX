@@ -353,6 +353,11 @@ void ContextImpl::SetFlagsFromCompactedEFLAGS(FEXCore::Core::InternalThreadState
 }
 
 bool ContextImpl::InitCore() {
+  if (GuestMemoryBase && (Config.Is64BitMode || IsAtomicTSOEnabled() || IsVectorAtomicTSOEnabled() || IsMemcpyAtomicTSOEnabled())) {
+    LogMan::Msg::EFmt("A guest memory base needs a 32-bit guest with TSO emulation off");
+    return false;
+  }
+
   if (CodeCache.IsGeneratingCache || FEXCore::Config::Get_ENABLECODECACHINGWIP()) {
     // Start with a larger code buffer to avoid resizes that would discard code
     StartMaximalCodeBuffer();
@@ -611,7 +616,7 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
 
 #ifdef ZYDIS_DISASSEMBLER
         if (FEXCore::Config::Get_X86DISASSEMBLE()) {
-          const uint8_t* InstBytes = reinterpret_cast<const uint8_t*>(InstAddress);
+          const uint8_t* InstBytes = GuestToHost<const uint8_t>(InstAddress);
           ZydisDisassembledInstruction ZydisInst;
           if (ZYAN_SUCCESS(ZydisDisassembleIntel(ZydisMachineMode, InstAddress, InstBytes, DecodedInfo->InstSize, &ZydisInst))) {
             LogMan::Msg::IFmt("    {:#x}: {}", InstAddress, ZydisInst.text);
@@ -996,7 +1001,7 @@ uintptr_t ContextImpl::CompileBlock(FEXCore::Core::CpuStateFrame* Frame, uint64_
       if (DebugData && DebugData->Relocations) {
         Relocations = *DebugData->Relocations;
       }
-      std::span<const uint8_t> GuestCode = {reinterpret_cast<const uint8_t*>(StartAddr), Length};
+      std::span<const uint8_t> GuestCode = {GuestToHost<const uint8_t>(StartAddr), Length};
       const Frontend::Decoder::DecodedBlockInformation* BlockInfo =
         NeedsAddGuestCodeRanges ? Thread->FrontendDecoder->GetDecodedBlockInfo() : nullptr;
       DiskCache.Store(Thread, Region, GuestRIP, *DiskCacheGuestCodeKey, GuestCode, CompiledCode, Relocations, BlockInfo);

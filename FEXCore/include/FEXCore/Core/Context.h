@@ -175,6 +175,17 @@ public:
   FEX_DEFAULT_VISIBILITY virtual void EnableExitOnHLT() = 0;
 
   /**
+   * @brief haku: places 32-bit guest memory behind a host base address.
+   *
+   * When non-zero, every guest memory access is made at Base + zext32(GuestAddress)
+   * and guest code is fetched from there too, so guest addresses never need to be
+   * host addresses. The JIT keeps Base in a reserved register. 32-bit guests only;
+   * set before InitCore. TSO emulation must be off.
+   */
+  FEX_DEFAULT_VISIBILITY virtual void SetGuestMemoryBase(uint64_t Base) = 0;
+  FEX_DEFAULT_VISIBILITY virtual uint64_t GetGuestMemoryBase() const = 0;
+
+  /**
    * @brief Adds a new Thunk trampoline handler
    *
    * @param Entrypoint The guest PC that the custom thunk trampoline IR handler will be installed at.

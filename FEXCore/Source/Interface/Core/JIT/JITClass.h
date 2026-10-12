@@ -69,6 +69,8 @@ private:
   const bool HostSupportsAVX256 {};
   const bool HostSupportsRPRES {};
   const bool HostSupportsAFP {};
+  // haku: guest memory base (see Context::SetGuestMemoryBase).
+  const bool GuestMemBase {};
 
   struct RestartOptions {
     enum class Control : uint64_t {
@@ -318,6 +320,39 @@ private:
   [[nodiscard]]
   static bool IsFPR(IR::OrderedNodeWrapper Wrap) {
     return IsFPR(IR::PhysicalRegister(Wrap).AsRegClass());
+  }
+
+  [[nodiscard]]
+  bool HasGuestMemBase() const {
+#ifndef ARCHITECTURE_arm64ec
+    return GuestMemBase;
+#else
+    return false;
+#endif
+  }
+
+  // Host address of the 32-bit guest address in Addr: REG_MEMBASE + zext32(Addr) in
+  // REG_MEMADDR when there is a guest memory base, Addr itself otherwise. Only one
+  // such address can be live at a time.
+  ARMEmitter::Register GuestHostAddr(ARMEmitter::Register Addr) {
+#ifndef ARCHITECTURE_arm64ec
+    if (HasGuestMemBase()) {
+      add(ARMEmitter::Size::i64Bit, REG_MEMADDR, REG_MEMBASE, Addr, ARMEmitter::ExtendedType::UXTW, 0);
+      return REG_MEMADDR;
+    }
+#endif
+    return Addr;
+  }
+
+  // Like GuestHostAddr, into Dst (for ops that need two host addresses at once).
+  void GuestHostAddrTo(ARMEmitter::Register Dst, ARMEmitter::Register Addr) {
+#ifndef ARCHITECTURE_arm64ec
+    if (HasGuestMemBase()) {
+      add(ARMEmitter::Size::i64Bit, Dst, REG_MEMBASE, Addr, ARMEmitter::ExtendedType::UXTW, 0);
+      return;
+    }
+#endif
+    mov(ARMEmitter::Size::i64Bit, Dst, Addr);
   }
 
   [[nodiscard]]

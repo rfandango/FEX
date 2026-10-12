@@ -47,6 +47,12 @@ constexpr auto REG_AF = ARMEmitter::Reg::r27;
 
 constexpr auto REG_CALLRET_SP = ARMEmitter::XReg::x25;
 
+// haku: with a guest memory base (32-bit guests), x19 holds the base and x24 is
+// scratch for host addresses formed from it. Both leave the 32-bit RA pool and
+// are callee-saved, so calls out of the JIT preserve the base.
+constexpr auto REG_MEMBASE = ARMEmitter::XReg::x19;
+constexpr auto REG_MEMADDR = ARMEmitter::XReg::x24;
+
 // Vector temporaries
 constexpr auto VTMP1 = ARMEmitter::VReg::v0;
 constexpr auto VTMP2 = ARMEmitter::VReg::v1;

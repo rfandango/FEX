@@ -463,6 +463,22 @@ public:
     return ExitOnHLT;
   }
 
+  void SetGuestMemoryBase(uint64_t Base) override {
+    GuestMemoryBase = Base;
+  }
+
+  uint64_t GetGuestMemoryBase() const override {
+    return GuestMemoryBase;
+  }
+
+  // haku: host address of guest address 0 (32-bit guests), or 0 when guest addresses are host addresses.
+  uint64_t GuestMemoryBase = 0;
+
+  template<typename T = uint8_t>
+  T* GuestToHost(uint64_t GuestAddr) const {
+    return reinterpret_cast<T*>(GuestMemoryBase ? GuestMemoryBase + static_cast<uint32_t>(GuestAddr) : GuestAddr);
+  }
+
   bool AreMonoHacksActive() const {
     return Config.MonoHacks && MonoDetected;
   }
