@@ -9,6 +9,13 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef __ANDROID__
+#include <sys/syscall.h>
+// Bionic has no getdents64 wrapper.
+static inline ssize_t getdents64(int fd, void* dirp, size_t count) {
+  return ::syscall(SYS_getdents64, fd, dirp, count);
+}
+#endif
 #else
 #include <windows.h>
 #include <winnt.h>
