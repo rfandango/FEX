@@ -61,9 +61,9 @@ if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "Unsupported pointer size ${CMAKE_SIZEOF_VOID_P}."
     " FEX only supports 64-bit (8-byte pointer) systems."
     " If you believe this is in error, file an issue.")
-elseif (NOT (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+elseif (NOT (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android"))
   message(FATAL_ERROR "Unsupported system type ${CMAKE_SYSTEM_NAME}."
-    " FEX only supports Linux and Windows."
+    " FEX only supports Linux, Android and Windows."
     " If you believe this is in error, file an issue.")
 endif()
 
@@ -361,7 +361,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -fomit-frame-pointer")
 set(CMAKE_LINKER_FLAGS_RELEASE "${CMAKE_LINKER_FLAGS_RELEASE} -fomit-frame-pointer")
 
 ## Modules ##
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/Data/CMake/)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/Data/CMake/)
 
 include(LinkerGC)
 
@@ -559,7 +559,7 @@ if (OVERRIDE_VERSION STREQUAL "detect")
   if (GIT_FOUND)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} describe --abbrev=7
-      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       OUTPUT_VARIABLE GIT_DESCRIBE_STRING
       ERROR_QUIET
       OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -576,7 +576,7 @@ if (OVERRIDE_HASH STREQUAL "detect")
   if (GIT_FOUND)
     execute_process(
       COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       OUTPUT_VARIABLE GIT_HASH
       ERROR_QUIET
       OUTPUT_STRIP_TRAILING_WHITESPACE)
