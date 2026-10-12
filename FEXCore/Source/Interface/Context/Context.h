@@ -479,6 +479,18 @@ public:
     return reinterpret_cast<T*>(GuestMemoryBase ? GuestMemoryBase + static_cast<uint32_t>(GuestAddr) : GuestAddr);
   }
 
+  void EnableSystemOps() override {
+    SystemOps = true;
+  }
+
+  void SetGuestCycleCounterRatio(uint64_t RatioQ32) override {
+    GuestCycleCounterRatioQ32 = RatioQ32;
+  }
+
+  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio.
+  bool SystemOps = false;
+  uint64_t GuestCycleCounterRatioQ32 = 0;
+
   bool AreMonoHacksActive() const {
     return Config.MonoHacks && MonoDetected;
   }

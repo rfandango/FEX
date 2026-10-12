@@ -397,6 +397,40 @@ struct JITPointers {
   alignas(16) uint64_t NamedVectorConstants[FEXCore::IR::NamedVectorConstant::NAMED_VECTOR_CONST_POOL_MAX][2];
 };
 
+// haku: privileged and system instructions handed to the SyscallHandler in system mode
+// (Context::EnableSystemOps). The handler decodes operands from the instruction bytes.
+enum class SystemOpKind : uint8_t {
+  None = 0,
+  In,
+  Out,
+  Ins,
+  Outs,
+  Cli,
+  Sti,
+  Hlt,
+  Int,
+  Into,
+  Int1,
+  Int3,
+  Ud2,
+  Rdmsr,
+  Wrmsr,
+  Rdpmc,
+  Wbinvd,
+  Invd,
+  Invlpg,
+  Clts,
+  MovCR,
+  MovDR,
+  Lgdt,
+  Lidt,
+  Lldt,
+  Ltr,
+  Lmsw,
+  Cpuid,
+  Other,
+};
+
 // Each guest JIT frame has one of these
 struct CpuStateFrame {
   CPUState State;
@@ -416,6 +450,16 @@ struct CpuStateFrame {
    *  - Bit 14-0: Number of static registers spilled
    */
   uint64_t InSyscallInfo {};
+
+  /**
+   * @brief haku: non-zero when a system instruction, not a syscall, entered the SyscallHandler.
+   *
+   *  - Bits 7-0: SystemOpKind
+   *  - Bits 15-8: instruction size in bytes; State.rip is the instruction itself
+   *
+   * The handler sets State.rip to where execution resumes and clears this.
+   */
+  uint64_t SystemOpInfo {};
 
   uint32_t SignalHandlerRefCounter {};
 

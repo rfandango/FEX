@@ -186,6 +186,22 @@ public:
   FEX_DEFAULT_VISIBILITY virtual uint64_t GetGuestMemoryBase() const = 0;
 
   /**
+   * @brief haku: system mode, for a guest that runs in ring 0.
+   *
+   * Privileged and system instructions (I/O, CLI/STI, HLT, INT n/INT3/INT1/INTO, UD2,
+   * MSRs, control/debug registers, descriptor tables, cache control, CPUID) leave the
+   * JIT through the syscall path with CpuStateFrame::SystemOpInfo set, instead of raising
+   * guest signals. HLT keeps exiting the JIT when EnableExitOnHLT is on. Set before InitCore.
+   */
+  FEX_DEFAULT_VISIBILITY virtual void EnableSystemOps() = 0;
+
+  /**
+   * @brief haku: RDTSC returns the host cycle counter times RatioQ32 / 2^32 (0: unscaled).
+   * Set before InitCore.
+   */
+  FEX_DEFAULT_VISIBILITY virtual void SetGuestCycleCounterRatio(uint64_t RatioQ32) = 0;
+
+  /**
    * @brief Adds a new Thunk trampoline handler
    *
    * @param Entrypoint The guest PC that the custom thunk trampoline IR handler will be installed at.

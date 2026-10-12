@@ -81,8 +81,9 @@ constexpr std::array<X86InstInfo, MAX_SECOND_TABLE_SIZE> SecondBaseOps = []() co
     {0x18, 1, X86InstInfo{"",           TYPE_GROUP_16, FLAGS_NO_OVERLAY,                                                                                      0}},
     {0x19, 7, X86InstInfo{"NOP",        TYPE_INST, FLAGS_MODRM | FLAGS_NO_OVERLAY,                                                                                     0}},
 
-    {0x20, 2, X86InstInfo{"MOV",        TYPE_INST, GenFlagsSameSize(SIZE_64BIT) | FLAGS_NO_OVERLAY,                                                     0}},
-    {0x22, 2, X86InstInfo{"MOV",        TYPE_INST, GenFlagsSameSize(SIZE_64BIT) | FLAGS_NO_OVERLAY,                                                     0}},
+    // haku: MOV CR/DR take a ModRM byte (mod is ignored); system mode resumes after the whole instruction.
+    {0x20, 2, X86InstInfo{"MOV",        TYPE_INST, GenFlagsSameSize(SIZE_64BIT) | FLAGS_MODRM | FLAGS_SF_MOD_REG_ONLY | FLAGS_NO_OVERLAY,                0}},
+    {0x22, 2, X86InstInfo{"MOV",        TYPE_INST, GenFlagsSameSize(SIZE_64BIT) | FLAGS_MODRM | FLAGS_SF_MOD_REG_ONLY | FLAGS_NO_OVERLAY,                0}},
     {0x24, 4, X86InstInfo{"",           TYPE_INVALID, FLAGS_NONE,                                                                                       0}},
     {0x28, 1, X86InstInfo{"MOVAPS",     TYPE_INST, GenFlagsSameSize(SIZE_128BIT) | FLAGS_MODRM | FLAGS_XMM_FLAGS,                                                 0}},
     {0x29, 1, X86InstInfo{"MOVAPS",     TYPE_INST, GenFlagsSameSize(SIZE_128BIT) | FLAGS_MODRM | FLAGS_SF_MOD_DST | FLAGS_XMM_FLAGS,                                                 0}},

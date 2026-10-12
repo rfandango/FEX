@@ -1364,6 +1364,12 @@ void OpDispatchBuilder::MOVOffsetOp(OpcodeArgs) {
 }
 
 void OpDispatchBuilder::CPUIDOp(OpcodeArgs) {
+  if (CTX->SystemOps) {
+    // haku: the embedder describes the guest CPU.
+    SystemOp(Op, FEXCore::Core::SystemOpKind::Cpuid);
+    return;
+  }
+
   Ref Src = LoadGPRRegister(X86State::REG_RAX);
   Ref Leaf = LoadGPRRegister(X86State::REG_RCX);
 
@@ -3113,7 +3119,14 @@ OpDispatchBuilder::CycleCounterPair OpDispatchBuilder::CycleCounter(bool SelfSyn
   Ref CounterLow {};
   Ref CounterHigh {};
   auto Counter = _CycleCounter(SelfSynchronizingLoads);
-  if (CTX->Config.TSCScale) {
+  if (CTX->GuestCycleCounterRatioQ32) {
+    // haku: (Counter * Ratio) >> 32 with a 128-bit product.
+    auto Ratio = Constant(CTX->GuestCycleCounterRatioQ32);
+    auto Lo = _UMul(OpSize::i64Bit, Counter, Ratio);
+    auto Hi = _UMulH(OpSize::i64Bit, Counter, Ratio);
+    CounterLow = _Lshr(OpSize::i64Bit, Lo, Constant(32));
+    CounterHigh = _Bfe(OpSize::i64Bit, 32, 0, Hi);
+  } else if (CTX->Config.TSCScale) {
     CounterLow = _Lshl(OpSize::i32Bit, Counter, Constant(CTX->Config.TSCScale));
     CounterHigh = _Lshr(OpSize::i64Bit, Counter, Constant(32 - CTX->Config.TSCScale));
   } else {
@@ -4808,6 +4821,20 @@ void OpDispatchBuilder::LSLOp(OpcodeArgs) {
 }
 
 void OpDispatchBuilder::INTOp(OpcodeArgs) {
+  if (CTX->SystemOps && !(Op->OP == 0xF4 && CTX->ExitOnHLTEnabled())) {
+    // haku: interrupts, traps, HLT and UD2 go to the embedder.
+    using enum FEXCore::Core::SystemOpKind;
+    switch (Op->OP) {
+    case 0xCD: SystemOp(Op, Int); return;
+    case 0xCE: SystemOp(Op, Into); return;
+    case 0xF1: SystemOp(Op, Int1); return;
+    case 0xF4: SystemOp(Op, Hlt); return;
+    case 0x0B: SystemOp(Op, Ud2); return;
+    case 0xCC: SystemOp(Op, Int3); return;
+    default: break;
+    }
+  }
+
   IR::BreakDefinition Reason;
   bool SetRIPToNext = false;
 
@@ -5171,7 +5198,49 @@ void OpDispatchBuilder::UnimplementedOp(OpcodeArgs) {
               });
 }
 
+void OpDispatchBuilder::SystemOp(OpcodeArgs, FEXCore::Core::SystemOpKind Kind) {
+  // Same shape as SyscallOp: everything in the context, RIP at this instruction,
+  // then the dispatcher's syscall path calls the handler and resumes at State.rip.
+  CalculateDeferredFlags();
+
+  const auto GPRSize = GetGPROpSize();
+  _StoreContextGPR(GPRSize, GetRelocatedPC(Op, -Op->InstSize), offsetof(FEXCore::Core::CPUState, rip));
+  const uint64_t Info = static_cast<uint64_t>(Kind) | (static_cast<uint64_t>(Op->InstSize) << 8);
+  _StoreContextGPR(OpSize::i64Bit, Constant(Info), offsetof(FEXCore::Core::CpuStateFrame, SystemOpInfo));
+
+  FlushRegisterCache();
+  _Syscall();
+
+  if (Multiblock) {
+    auto NextBlock = CreateNewCodeBlockAfter(GetCurrentBlock());
+    SetCurrentCodeBlock(NextBlock);
+    StartNewBlock();
+  } else {
+    BlockSetRIP = true;
+  }
+}
+
+static FEXCore::Core::SystemOpKind SystemOpKindFromName(std::string_view Name) {
+  using enum FEXCore::Core::SystemOpKind;
+  static constexpr std::pair<std::string_view, FEXCore::Core::SystemOpKind> Kinds[] = {
+    {"IN", In},         {"OUT", Out},       {"INS", Ins},     {"OUTS", Outs},   {"CLI", Cli},     {"STI", Sti},
+    {"RDMSR", Rdmsr},   {"WRMSR", Wrmsr},   {"RDPMC", Rdpmc}, {"WBINVD", Wbinvd}, {"INVD", Invd}, {"INVLPG", Invlpg},
+    {"CLTS", Clts},     {"LGDT", Lgdt},     {"LIDT", Lidt},   {"LLDT", Lldt},   {"LTR", Ltr},     {"LMSW", Lmsw},
+  };
+  for (const auto& [KindName, Kind] : Kinds) {
+    if (Name == KindName) {
+      return Kind;
+    }
+  }
+  return Other; // e.g. MOV CR/DR: the embedder decodes the instruction bytes.
+}
+
 void OpDispatchBuilder::PermissionRestrictedOp(OpcodeArgs) {
+  if (CTX->SystemOps) {
+    SystemOp(Op, SystemOpKindFromName(Op->TableInfo && Op->TableInfo->Name ? Op->TableInfo->Name : ""));
+    return;
+  }
+
   BreakOp(Op, FEXCore::IR::BreakDefinition {
                 .ErrorRegister = 0,
                 .Signal = SIGSEGV,
