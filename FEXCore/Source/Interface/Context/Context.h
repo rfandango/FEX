@@ -487,9 +487,16 @@ public:
     GuestCycleCounterRatioQ32 = RatioQ32;
   }
 
-  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio.
+  void SetHookQuery(HookQueryFn Fn, void* Opaque) override {
+    HookQuery = Fn;
+    HookQueryOpaque = Opaque;
+  }
+
+  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio / SetHookQuery.
   bool SystemOps = false;
   uint64_t GuestCycleCounterRatioQ32 = 0;
+  HookQueryFn HookQuery = nullptr;
+  void* HookQueryOpaque = nullptr;
 
   bool AreMonoHacksActive() const {
     return Config.MonoHacks && MonoDetected;

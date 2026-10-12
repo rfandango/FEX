@@ -5220,6 +5220,45 @@ void OpDispatchBuilder::SystemOp(OpcodeArgs, FEXCore::Core::SystemOpKind Kind) {
   }
 }
 
+// Leaves through the syscall path as Kind with RIP at Address (nothing at
+// Address has run), from a new code block entered when Cond is true; code
+// generation continues after it in a block entered when Cond is false.
+static void SystemExitIf(OpDispatchBuilder* OD, Ref Cond, uint64_t Address, uint64_t GuestRIP,
+                         FEXCore::Core::SystemOpKind Kind, IR::OpSize GPRSize) {
+  auto Jump = OD->CondJump(Cond);
+  auto CurrentBlock = OD->GetCurrentBlock();
+
+  auto ExitBlock = OD->CreateNewCodeBlockAtEnd();
+  OD->SetTrueJumpTarget(Jump, ExitBlock);
+  OD->SetCurrentCodeBlock(ExitBlock);
+  OD->StartNewBlock();
+  OD->_StoreContextGPR(GPRSize, OD->_EntrypointOffset(GPRSize, Address - GuestRIP), offsetof(FEXCore::Core::CPUState, rip));
+  OD->_StoreContextGPR(IR::OpSize::i64Bit, OD->Constant(static_cast<uint64_t>(Kind)),
+                       offsetof(FEXCore::Core::CpuStateFrame, SystemOpInfo));
+  OD->FlushRegisterCache();
+  OD->_Syscall();
+
+  auto BodyBlock = OD->CreateNewCodeBlockAfter(CurrentBlock);
+  OD->SetFalseJumpTarget(Jump, BodyBlock);
+  OD->SetCurrentCodeBlock(BodyBlock);
+  OD->StartNewBlock();
+}
+
+void OpDispatchBuilder::InterruptCheck(uint64_t BlockEntry, uint64_t GuestRIP) {
+  auto Pending = _LoadContextGPR(OpSize::i32Bit, offsetof(FEXCore::Core::CpuStateFrame, InterruptPending));
+  SystemExitIf(this, Pending, BlockEntry, GuestRIP, FEXCore::Core::SystemOpKind::Interrupt, GetGPROpSize());
+}
+
+void OpDispatchBuilder::HookCheck(uint64_t InstAddress, uint64_t GuestRIP) {
+  // Mid-block: the flags must be in the context before leaving.
+  CalculateDeferredFlags();
+  FlushRegisterCache();
+  auto Bypass = _LoadContextGPR(OpSize::i32Bit, offsetof(FEXCore::Core::CpuStateFrame, HookBypass));
+  auto Other = _Sub(OpSize::i32Bit, Bypass, Constant(static_cast<uint32_t>(InstAddress)));
+  SystemExitIf(this, Other, InstAddress, GuestRIP, FEXCore::Core::SystemOpKind::Hook, GetGPROpSize());
+  _StoreContextGPR(OpSize::i32Bit, Constant(0), offsetof(FEXCore::Core::CpuStateFrame, HookBypass));
+}
+
 static FEXCore::Core::SystemOpKind SystemOpKindFromName(std::string_view Name) {
   using enum FEXCore::Core::SystemOpKind;
   static constexpr std::pair<std::string_view, FEXCore::Core::SystemOpKind> Kinds[] = {

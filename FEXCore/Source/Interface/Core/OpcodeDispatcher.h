@@ -899,6 +899,12 @@ public:
   void PermissionRestrictedOp(OpcodeArgs);
   // haku: hands a system instruction to the embedder (Context::EnableSystemOps).
   void SystemOp(OpcodeArgs, FEXCore::Core::SystemOpKind Kind);
+  // haku: system-mode exits the frontend places in guest code (Core.cpp).
+  // InterruptCheck starts a guest block: leave as SystemOpKind::Interrupt when
+  // InterruptPending is set. HookCheck precedes a hooked instruction: leave as
+  // SystemOpKind::Hook unless HookBypass names it (then clear HookBypass and run it).
+  void InterruptCheck(uint64_t BlockEntry, uint64_t GuestRIP);
+  void HookCheck(uint64_t InstAddress, uint64_t GuestRIP);
 
   ///< Helper for PSHUD and VPERMILPS(imm) since they are the same instruction
   Ref Single128Bit4ByteVectorShuffle(Ref Src, uint8_t Shuffle);

@@ -600,6 +600,14 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
       Thread->OpDispatcher->StartNewBlock();
 
       const uint64_t InstsInBlock = Block.NumInstructions;
+
+      // haku: in system mode every guest block, multiblock targets included so
+      // loops are covered, starts by testing InterruptPending. When set, the
+      // block leaves through the syscall path as SystemOpKind::Interrupt with
+      // RIP at its first instruction, before anything in it has run.
+      if (SystemOps && InstsInBlock) {
+        Thread->OpDispatcher->InterruptCheck(Block.Entry, GuestRIP);
+      }
       if (InstsInBlock == 0) {
         // Special case for an empty instruction block.
         Thread->OpDispatcher->ExitFunction(Thread->OpDispatcher->_InlineEntrypointOffset(GPRSize, Block.Entry - GuestRIP));
@@ -641,6 +649,11 @@ ContextImpl::GenerateIR(FEXCore::Core::InternalThreadState* Thread, uint64_t Gue
         // side effect here and (if that behaviour is required) we should handle
         // that more explicitly later.
         Thread->OpDispatcher->FlushRegisterCache(true);
+
+        // haku: the embedder takes over before a hooked instruction.
+        if (SystemOps && HookQuery && TableInfo && HookQuery(HookQueryOpaque, InstAddress)) {
+          Thread->OpDispatcher->HookCheck(InstAddress, GuestRIP);
+        }
 
         if (ExtendedDebugInfo || Thread->OpDispatcher->CanHaveSideEffects(TableInfo, DecodedInfo)) {
           Thread->OpDispatcher->_GuestOpcode(InstAddress - GuestRIP);

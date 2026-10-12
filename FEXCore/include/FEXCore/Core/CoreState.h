@@ -429,6 +429,12 @@ enum class SystemOpKind : uint8_t {
   Lmsw,
   Cpuid,
   Other,
+  // Not an instruction: InterruptPending was set when a guest block began.
+  // State.rip is that block's first instruction, and the size is 0.
+  Interrupt,
+  // Not an instruction: State.rip is a hooked instruction (Context::SetHookQuery)
+  // that hasn't run; the size is 0.
+  Hook,
 };
 
 // Each guest JIT frame has one of these
@@ -460,6 +466,19 @@ struct CpuStateFrame {
    * The handler sets State.rip to where execution resumes and clears this.
    */
   uint64_t SystemOpInfo {};
+
+  /**
+   * @brief haku: set (by any host thread) to make the guest leave at the start of
+   * its next block with SystemOpKind::Interrupt. In system mode every guest block
+   * begins by testing it. The handler clears it.
+   */
+  uint32_t InterruptPending {};
+
+  /**
+   * @brief haku: a hooked instruction's address, to run it once without the hook
+   * (cleared when it does).
+   */
+  uint32_t HookBypass {};
 
   uint32_t SignalHandlerRefCounter {};
 

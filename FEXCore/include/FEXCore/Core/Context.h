@@ -202,6 +202,16 @@ public:
   FEX_DEFAULT_VISIBILITY virtual void SetGuestCycleCounterRatio(uint64_t RatioQ32) = 0;
 
   /**
+   * @brief haku: hooked guest addresses (system mode). Fn is asked at translation time
+   * for every guest instruction address; before one it answers true for, the JIT leaves
+   * through the syscall path as SystemOpKind::Hook with State.rip there. Setting
+   * CpuStateFrame::HookBypass to that address lets the next attempt run it instead.
+   * Answers must not change for translated code without invalidating it.
+   */
+  using HookQueryFn = bool (*)(void* Opaque, uint64_t GuestRIP);
+  FEX_DEFAULT_VISIBILITY virtual void SetHookQuery(HookQueryFn Fn, void* Opaque) = 0;
+
+  /**
    * @brief Adds a new Thunk trampoline handler
    *
    * @param Entrypoint The guest PC that the custom thunk trampoline IR handler will be installed at.
