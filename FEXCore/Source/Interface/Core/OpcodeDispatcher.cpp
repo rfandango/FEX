@@ -3061,6 +3061,12 @@ void OpDispatchBuilder::SIDTOp(OpcodeArgs) {
 
   // See SGDTOp, matches Linux in reported values
   uint64_t IDTAddress = 0xFFFFFE0000000000ULL;
+  uint16_t IDTLimit = 0xfff;
+  // haku: a ring-0 guest's IDT is the embedder's.
+  if (CTX->SystemOps) {
+    IDTAddress = CTX->IDTBase;
+    IDTLimit = CTX->IDTLimit;
+  }
   auto IDTStoreSize = OpSize::i64Bit;
   if (!Is64BitMode) {
     // Mask off upper bits if 32-bit result.
@@ -3068,7 +3074,7 @@ void OpDispatchBuilder::SIDTOp(OpcodeArgs) {
     IDTStoreSize = OpSize::i32Bit;
   }
 
-  _StoreMemGPRAutoTSO(OpSize::i16Bit, DestAddress, Constant(0xfff));
+  _StoreMemGPRAutoTSO(OpSize::i16Bit, DestAddress, Constant(IDTLimit));
   _StoreMemGPRAutoTSO(IDTStoreSize, AddressMode {.Base = DestAddress, .Offset = 2, .AddrSize = OpSize::i64Bit}, Constant(IDTAddress));
 }
 

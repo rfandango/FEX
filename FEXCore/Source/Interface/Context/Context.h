@@ -487,14 +487,21 @@ public:
     GuestCycleCounterRatioQ32 = RatioQ32;
   }
 
+  void SetIDTRegister(uint64_t Base, uint16_t Limit) override {
+    IDTBase = Base;
+    IDTLimit = Limit;
+  }
+
   void SetHookQuery(HookQueryFn Fn, void* Opaque) override {
     HookQuery = Fn;
     HookQueryOpaque = Opaque;
   }
 
-  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio / SetHookQuery.
+  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio / SetIDTRegister / SetHookQuery.
   bool SystemOps = false;
   uint64_t GuestCycleCounterRatioQ32 = 0;
+  uint64_t IDTBase = 0;
+  uint16_t IDTLimit = 0;
   HookQueryFn HookQuery = nullptr;
   void* HookQueryOpaque = nullptr;
 

@@ -202,6 +202,11 @@ public:
   FEX_DEFAULT_VISIBILITY virtual void SetGuestCycleCounterRatio(uint64_t RatioQ32) = 0;
 
   /**
+   * @brief haku: what SIDT stores in system mode (the embedder's IDT). Set before InitCore.
+   */
+  FEX_DEFAULT_VISIBILITY virtual void SetIDTRegister(uint64_t Base, uint16_t Limit) = 0;
+
+  /**
    * @brief haku: hooked guest addresses (system mode). Fn is asked at translation time
    * for every guest instruction address; before one it answers true for, the JIT leaves
    * through the syscall path as SystemOpKind::Hook with State.rip there. Setting
