@@ -97,6 +97,12 @@ void IREmitter::ResetWorkingList() {
 }
 
 void IREmitter::ReplaceAllUsesWithRange(Ref Node, Ref NewNode, AllNodesIterator Begin, AllNodesIterator End) {
+  // haku: nothing to replace. Without this a node with no uses (an x87
+  // SyncStackToSlow's, say) scanned to the end of the multiblock: per x87
+  // op, quadratic, 15-20 ms compiles in Blinx's x87 code.
+  if (Node->NumUses == 0) {
+    return;
+  }
   uintptr_t ListBegin = DualListData.ListBegin();
   auto NodeId = Node->Wrapped(ListBegin).ID();
 
