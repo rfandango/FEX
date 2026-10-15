@@ -499,6 +499,8 @@ void ContextImpl::OnCodeBufferAllocated(const fextl::shared_ptr<CPU::CodeBuffer>
 
 void ContextImpl::ClearCodeCache(FEXCore::Core::InternalThreadState* Thread, bool NewCodeBuffer) {
   FEXCORE_PROFILE_INSTANT("ClearCodeCache");
+  // haku: every block is translated again after this (a burst of compiles).
+  LogMan::Msg::IFmt("haku: code cache cleared{}", NewCodeBuffer ? " (new code buffer)" : "");
 
   if (NewCodeBuffer) {
     // Allocate new CodeBuffer + L3 LookupCache and clear L1+L2 caches
@@ -816,9 +818,14 @@ ContextImpl::CompileCodeResult ContextImpl::CompileCode(FEXCore::Core::InternalT
     }
   }
 
+  // haku: a long compile holds the guest's interrupts (a late vblank is a
+  // missed frame): over 4 ms is logged, its frontend + passes and backend.
+  const auto CompileStart = std::chrono::steady_clock::now();
+
   // Generate IR + Meta Info
   auto [IRView, TotalInstructions, TotalInstructionsLength, StartAddr, Length, NeedsAddGuestCodeRanges] =
     GenerateIR(Thread, GuestRIP, Config.GDBSymbols(), MaxInst);
+  const auto IRDone = std::chrono::steady_clock::now();
   if (!IRView) {
     Thread->FrontendDecoder->ValidateDisownedOrFree();
     Thread->OpDispatcher->ValidateDisownedOrFree();
@@ -851,6 +858,14 @@ ContextImpl::CompileCodeResult ContextImpl::CompileCode(FEXCore::Core::InternalT
   bool TFSet = Thread->CurrentFrame->State.flags[X86State::RFLAG_TF_RAW_LOC];
 
   auto CompiledCode = Thread->CPUBackend->CompileCode(GuestRIP, Length, TotalInstructions == 1, &*IRView, DebugData.get(), TFSet);
+
+  if (const auto Done = std::chrono::steady_clock::now(); Done - CompileStart > std::chrono::milliseconds(4)) {
+    using Ms = std::chrono::duration<double, std::milli>;
+    LogMan::Msg::IFmt("haku: compiling {:#x} took {:.1f} ms ({} instructions, {} bytes): frontend + passes {:.1f} ms, backend "
+                      "{:.1f} ms",
+                      GuestRIP, Ms(Done - CompileStart).count(), TotalInstructions, Length, Ms(IRDone - CompileStart).count(),
+                      Ms(Done - IRDone).count());
+  }
 
   // Release the IR
   Thread->OpDispatcher->DelayedDisownBuffer();
