@@ -12,7 +12,10 @@
 #endif
 
 namespace FEXCore::CPU {
-static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 16;
+// haku: 64 MiB from the start. Outgrowing the buffer clears every block and
+// compiles them again (Conker filled 16 MiB in its first level: a 177 ms
+// frame); a guest's code fits well under it, and untouched pages cost nothing.
+static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 64;
 // We don't want to move above 128MB atm because that means we will have to encode longer jumps
 static constexpr size_t MAX_CODE_SIZE = 1024 * 1024 * 128;
 
