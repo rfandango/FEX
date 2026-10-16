@@ -207,6 +207,15 @@ public:
   FEX_DEFAULT_VISIBILITY virtual void SetIDTRegister(uint64_t Base, uint16_t Limit) = 0;
 
   /**
+   * @brief haku: x87 single precision in reduced precision (X87ReducedPrecisionControl).
+   * Code translated after this call rounds FADD/FSUB/FMUL/FDIV/FSQRT results to single
+   * precision while FCW.PC selects it; code translated before doesn't. The embedder calls it
+   * once it sees the guest select single precision, then invalidates what was translated
+   * so far. Thread safe.
+   */
+  FEX_DEFAULT_VISIBILITY virtual void EnableX87SinglePrecision() = 0;
+
+  /**
    * @brief haku: hooked guest addresses (system mode). Fn is asked at translation time
    * for every guest instruction address; before one it answers true for, the JIT leaves
    * through the syscall path as SystemOpKind::Hook with State.rip there. Setting

@@ -3,6 +3,8 @@
 
 #include <FEXCore/fextl/memory.h>
 
+#include <atomic>
+
 namespace FEXCore {
 class CPUIDEmu;
 struct HostFeatures;
@@ -13,7 +15,8 @@ class Pass;
 
 fextl::unique_ptr<Pass> CreateDeadFlagCalculationEliminination();
 fextl::unique_ptr<Pass> CreateRegisterAllocationPass(const CPUIDEmu* CPUID);
-fextl::unique_ptr<Pass> CreateX87StackOptimizationPass(const HostFeatures&, OpSize GPROpSize);
+// haku: SinglePrecision, Context::EnableX87SinglePrecision's flag.
+fextl::unique_ptr<Pass> CreateX87StackOptimizationPass(const HostFeatures&, OpSize GPROpSize, const std::atomic<bool>* SinglePrecision);
 
 namespace Validation {
   fextl::unique_ptr<Pass> CreateIRValidation();

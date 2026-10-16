@@ -643,6 +643,17 @@
           "Emulates X87 floating point using 64-bit precision. This reduces emulation accuracy and may result in rendering bugs."
         ]
       },
+      "X87ReducedPrecisionControl": {
+        "Type": "bool",
+        "Default": "true",
+        "AffectsCodeGen": "true",
+        "Desc": [
+          "With X87ReducedPrecision: while the guest's FCW.PC selects single precision, the results of",
+          "FADD/FSUB/FMUL/FDIV/FSQRT round to single precision, as the hardware's do. Double and extended",
+          "precision keep the 64-bit result. Only code translated after the embedder's",
+          "Context::EnableX87SinglePrecision (haku) carries it."
+        ]
+      },
       "StallProcess": {
         "Type": "bool",
         "Default": "false",

@@ -497,13 +497,19 @@ public:
     HookQueryOpaque = Opaque;
   }
 
-  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio / SetIDTRegister / SetHookQuery.
+  void EnableX87SinglePrecision() override {
+    X87SinglePrecision.store(true, std::memory_order_relaxed);
+  }
+
+  // haku: see Context::EnableSystemOps / SetGuestCycleCounterRatio / SetIDTRegister / SetHookQuery
+  // / EnableX87SinglePrecision.
   bool SystemOps = false;
   uint64_t GuestCycleCounterRatioQ32 = 0;
   uint64_t IDTBase = 0;
   uint16_t IDTLimit = 0;
   HookQueryFn HookQuery = nullptr;
   void* HookQueryOpaque = nullptr;
+  std::atomic<bool> X87SinglePrecision {false};
 
   bool AreMonoHacksActive() const {
     return Config.MonoHacks && MonoDetected;

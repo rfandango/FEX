@@ -151,11 +151,14 @@ private:
 
 class X87StackOptimization final : public Pass {
 public:
-  X87StackOptimization(const FEXCore::HostFeatures& Features, OpSize GPROpSize)
+  X87StackOptimization(const FEXCore::HostFeatures& Features, OpSize GPROpSize, const std::atomic<bool>* SinglePrecision)
     : Features(Features)
-    , GPROpSize(GPROpSize) {
+    , GPROpSize(GPROpSize)
+    , SinglePrecision(SinglePrecision) {
     FEX_CONFIG_OPT(ReducedPrecision, X87REDUCEDPRECISION);
+    FEX_CONFIG_OPT(ReducedPrecisionControl, X87REDUCEDPRECISIONCONTROL);
     ReducedPrecisionMode = ReducedPrecision;
+    PrecisionControl = ReducedPrecision && ReducedPrecisionControl;
   }
   void Run(IREmitter* Emit) override;
 
@@ -164,6 +167,20 @@ private:
   const OpSize GPROpSize;
   bool ReducedPrecisionMode;
   FEX_CONFIG_OPT(DisableVixlIndirectCalls, DISABLE_VIXL_INDIRECT_RUNTIME_CALLS);
+
+  // x87 precision control in reduced precision (X87ReducedPrecisionControl):
+  // while FCW.PC selects single precision, FADD/FSUB/FMUL/FDIV/FSQRT results
+  // round to single precision, as the hardware's do. Double and extended
+  // precision keep the double. Only translations made once the embedder has
+  // seen the guest select single precision (Context::EnableX87SinglePrecision)
+  // carry it: a guest that never does runs the plain reduced x87.
+  bool PrecisionControl = false;
+  const std::atomic<bool>* SinglePrecision;
+  bool RoundSingle = false; // this translation's: PrecisionControl and the flag
+  // All ones while FCW.PC selects single precision, else zero; built at the
+  // block's first rounded operation, built again after a store to FCW.
+  Ref PCMaskCache {};
+  Ref RoundToPrecisionControl(Ref Value);
 
   // Helpers
   Ref RotateRight8(uint32_t V, Ref Amount);
@@ -374,6 +391,7 @@ inline void X87StackOptimization::InvalidateCachedRegs() {
   TopOffsetAddressCache.fill(nullptr);
   TopValueCache.fill(nullptr);
   TopValidCache.fill(StackSlot::UNUSED);
+  PCMaskCache = {};
 }
 
 inline void X87StackOptimization::Reset() {
@@ -523,6 +541,27 @@ inline void X87StackOptimization::StackPop() {
 }
 
 
+Ref X87StackOptimization::RoundToPrecisionControl(Ref Value) {
+  if (!RoundSingle) {
+    return Value;
+  }
+  if (!PCMaskCache) {
+    // FCW.PC (bits 9:8) is 0 for single precision: (PC - 1) >> 63 is then all
+    // ones, and zero for double or extended. No flags are written (NZCV can
+    // hold the guest's).
+    Ref FCW = IREmit->_LoadContextGPR(OpSize::i16Bit, offsetof(FEXCore::Core::CPUState, FCW));
+    Ref PC = IREmit->_Bfe(OpSize::i32Bit, 2, 8, FCW);
+    Ref Mask = IREmit->_Sbfe(OpSize::i64Bit, 1, 63, IREmit->_Sub(OpSize::i64Bit, PC, GetConstant(1)));
+    PCMaskCache = IREmit->_VCastFromGPR(OpSize::i64Bit, OpSize::i64Bit, Mask);
+  }
+  // To single and back, in the host's rounding mode (FCW.RC's). For add, sub,
+  // mul, div and sqrt a double holds enough bits that rounding it again
+  // gives the single result rounded once from the exact one.
+  Ref Single = IREmit->_Float_FToF(OpSize::i32Bit, OpSize::i64Bit, Value);
+  Single = IREmit->_Float_FToF(OpSize::i64Bit, OpSize::i32Bit, Single);
+  return IREmit->_VBSL(OpSize::i64Bit, PCMaskCache, Single, Value);
+}
+
 void X87StackOptimization::HandleUnop(IROps Op64, bool VFOp64, IROps Op80) {
   Ref St0 = LoadStackValue();
   Ref Value {};
@@ -530,6 +569,7 @@ void X87StackOptimization::HandleUnop(IROps Op64, bool VFOp64, IROps Op80) {
   if (ReducedPrecisionMode) {
     if (VFOp64) {
       DeriveOp(Value, Op64, IREmit->_VFSqrt(OpSize::i64Bit, OpSize::i64Bit, St0));
+      Value = RoundToPrecisionControl(Value);
     } else {
       DeriveOp(Value, Op64, IREmit->_F64SIN(St0));
     }
@@ -556,6 +596,9 @@ void X87StackOptimization::HandleBinopValue(IROps Op64, bool VFOp64, IROps Op80,
       } else {
         DeriveOp(Node, Op64, IREmit->_F64FPREM(StackNode, ValueNode));
       }
+    }
+    if (VFOp64) {
+      Node = RoundToPrecisionControl(Node);
     }
   } else {
     if (Reverse) {
@@ -737,6 +780,7 @@ void X87StackOptimization::Run(IREmitter* Emit) {
 
   // Initialize IREmit member
   IREmit = Emit;
+  RoundSingle = PrecisionControl && SinglePrecision && SinglePrecision->load(std::memory_order_relaxed);
 
   // Run optimization proper
   for (auto [BlockNode, BlockHeader] : CurrentIR.GetBlocks()) {
@@ -747,6 +791,9 @@ void X87StackOptimization::Run(IREmitter* Emit) {
 
     IREmit->SetCurrentCodeBlock(BlockNode);
     for (auto [CodeNode, IROp] : CurrentIR.GetCode(BlockNode)) {
+      if (IROp->Op == OP_STORECONTEXT && IROp->C<IROp_StoreContext>()->Offset == offsetof(FEXCore::Core::CPUState, FCW)) {
+        PCMaskCache = {}; // FLDCW, FRSTOR, FNINIT...: the precision may change
+      }
       if (!LoweredX87(IROp->Op)) {
         continue;
       }
@@ -1235,7 +1282,7 @@ void X87StackOptimization::Run(IREmitter* Emit) {
   }
 }
 
-fextl::unique_ptr<Pass> CreateX87StackOptimizationPass(const HostFeatures& Features, OpSize GPROpSize) {
-  return fextl::make_unique<X87StackOptimization>(Features, GPROpSize);
+fextl::unique_ptr<Pass> CreateX87StackOptimizationPass(const HostFeatures& Features, OpSize GPROpSize, const std::atomic<bool>* SinglePrecision) {
+  return fextl::make_unique<X87StackOptimization>(Features, GPROpSize, SinglePrecision);
 }
 } // namespace FEXCore::IR
