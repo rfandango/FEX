@@ -3124,8 +3124,11 @@ void OpDispatchBuilder::SMSWOp(OpcodeArgs) {
 OpDispatchBuilder::CycleCounterPair OpDispatchBuilder::CycleCounter(bool SelfSynchronizingLoads) {
   Ref CounterLow {};
   Ref CounterHigh {};
-  auto Counter = _CycleCounter(SelfSynchronizingLoads);
+  Ref Counter = _CycleCounter(SelfSynchronizingLoads);
   if (CTX->GuestCycleCounterRatioQ32) {
+    // haku: less the ticks the emulation was paused for (CpuStateFrame::CycleCounterOffset)
+    Counter = _Sub(OpSize::i64Bit, Counter,
+                   _LoadContextGPR(OpSize::i64Bit, offsetof(FEXCore::Core::CpuStateFrame, CycleCounterOffset)));
     // haku: (Counter * Ratio) >> 32 with a 128-bit product.
     auto Ratio = Constant(CTX->GuestCycleCounterRatioQ32);
     auto Lo = _UMul(OpSize::i64Bit, Counter, Ratio);
